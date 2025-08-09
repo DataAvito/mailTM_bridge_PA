@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Token Fetcher</title>
+</head>
+<body>
+    <h1>Введи email и password для mail.tm</h1>
+    <form id="tokenForm">
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button type="submit">Получить и отправить token</button>
+    </form>
+    <div id="result"></div>
+
+    <script>
+        const form = document.getElementById('tokenForm');
+        const result = document.getElementById('result');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                // Шаг 1: Получить token от api.mail.tm
+                const mailResponse = await fetch('https://api.mail.tm/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address: email, password: password })
+                });
+                if (!mailResponse.ok) throw new Error('Ошибка авторизации');
+                const { token } = await mailResponse.json();
+
+                // Шаг 2: Отправить token на PA сервер
+                const paResponse = await fetch('https://yourusername.pythonanywhere.com/save_token', {  // Замени на твой URL
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, token })
+                });
+                if (!paResponse.ok) throw new Error('Ошибка отправки на PA');
+                const paData = await paResponse.json();
+                result.textContent = `Token сохранён: ${paData.message}`;
+            } catch (error) {
+                result.textContent = `Ошибка: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
