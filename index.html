@@ -5,44 +5,77 @@
     <title>Token Fetcher</title>
 </head>
 <body>
-    <h1>Введи email и password для mail.tm</h1>
-    <form id="tokenForm">
-        <input type="email" id="email" placeholder="Email" required>
-        <input type="password" id="password" placeholder="Password" required>
-        <button type="submit">Получить и отправить token</button>
-    </form>
+    <h1>Получить токены для всех аккаунтов</h1>
+    <button id="fetchButton">Запустить обновление токенов</button>
     <div id="result"></div>
 
     <script>
-        const form = document.getElementById('tokenForm');
+        const fetchButton = document.getElementById('fetchButton');
         const result = document.getElementById('result');
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+        // Функция для задержки (если нужно ограничить запросы)
+        const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+        fetchButton.addEventListener('click', async () => {
+            result.textContent = 'Обработка началась...';
             try {
-                // Шаг 1: Получить token от api.mail.tm
-                const mailResponse = await fetch('https://api.mail.tm/token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ address: email, password: password })
+                // Шаг 1: Получить аккаунты с PA
+                const response = await fetch('https://dataavitotokens.pythonanywhere.com/', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
                 });
-                if (!mailResponse.ok) throw new Error('Ошибка авторизации');
-                const { token } = await mailResponse.json();
+                if (!response.ok) throw new Error('Ошибка загрузки аккаунтов');
+                const accounts = await response.json();
 
-                // Шаг 2: Отправить token на PA сервер
-                const paResponse = await fetch('https://yourusername.pythonanywhere.com/save_token', {  // Замени на твой URL
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, token })
-                });
-                if (!paResponse.ok) throw new Error('Ошибка отправки на PA');
-                const paData = await paResponse.json();
-                result.textContent = `Token сохранён: ${paData.message}`;
+                if (!accounts.length) {
+                    result.textContent = 'Нет аккаунтов в accounts.json';
+                    return;
+                }
+
+                // Шаг 2: Цикл по аккаунтам
+                let successCount = 0;
+                let errors = [];
+                for (const acc of accounts) {
+                    const email = acc.email;
+                    const password = acc.password;
+
+                    try {
+                        // Запрос токена от api.mail.tm
+                        const mailResponse = await fetch('https://api.mail.tm/token', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ address: email, password: password })
+                        });
+                        if (!mailResponse.ok) {
+                            throw new Error(`Ошибка авторизации для ${email}: ${mailResponse.status}`);
+                        }
+                        const { token } = await mailResponse.json();
+
+                        // Отправка токена на PA
+                        const paResponse = await fetch('https://dataavitotokens.pythonanywhere.com/', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, token })
+                        });
+                        if (!paResponse.ok) {
+                            throw new Error(`Ошибка сохранения токена для ${email}`);
+                        }
+                        successCount++;
+                        result.textContent = `Обработано ${successCount} аккаунтов...`;
+                    } catch (error) {
+                        errors.push(`Ошибка для ${email}: ${error.message}`);
+                    }
+                    // Задержка 500 мс, чтобы не превысить лимит API (8 req/s)
+                    await delay(500);
+                }
+
+                // Итоговый результат
+                result.textContent = `Готово! Успешно: ${successCount}, Ошибок: ${errors.length}`;
+                if (errors.length) {
+                    result.innerHTML += '<br>Ошибки:<br>' + errors.join('<br>');
+                }
             } catch (error) {
-                result.textContent = `Ошибка: ${error.message}`;
+                result.textContent = `Критическая ошибка: ${error.message}`;
             }
         });
     </script>
