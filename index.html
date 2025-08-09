@@ -52,7 +52,7 @@
                         const { token } = await mailResponse.json();
 
                         // Отправка токена на PA
-                        const paResponse = await fetch('https://dataavitotokens.pythonanywhere.com/', {
+                        const paResponse = await fetch('https://dataavitotokens.pythonanywhere.com/save_token', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email, token })
